@@ -1,0 +1,77 @@
+---
+title: "Modeling and Predicting the Wellness of Barbell Lifts Performance"
+author: "Y. Jiang"
+date: "April 26, 2015"
+output: html_document
+---
+
+```{r, cache=TRUE, message=FALSE, echo=FALSE}
+setwd("~/Dropbox/DataScience/Practical-Machine-Learning/Project/Practical-Machine-Learning-Course-Project")
+```
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to model the wellness of barbell lifts performance. More information about the data is available from the website [here](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset). And we'll predict the wellness with the final model on 20 different cases.
+
+## Getting and Cleaning Data
+We'll download the training and testing data sets from URL links below.
+
+```{r, echo=TRUE, cache=TRUE}
+fileURL = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+fileURL2 = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+if (!file.exists("pml-training.csv")) {
+        download.file(fileURL, destfile="pml-training.csv", method="curl")
+}
+if (!file.exists("pml-testing.csv")) {
+        download.file(fileURL2, destfile="pml-testing.csv", method="curl")
+}
+
+traindata = read.csv("pml-training.csv")
+testdata = read.csv("pml-testing.csv")
+
+```
+
+First, let's take a look at the training data. Here, the **classe** variable is the outcome.
+
+```{r, echo=TRUE}
+dim(traindata)
+str(traindata, list.len=15)
+table(traindata$classe)
+class(traindata$classe)
+```
+
+Check whether there are any missing values.
+
+```{r}
+sum(complete.cases(traindata))
+```
+
+For 19,622 observations, there're only 406 ones with non-missing value. It is very likely that for some variables, there are a lot of missing values. We'll exclude any variable with more than 20% missing values. Also, some of the variables like X, timestamp are irrelevant to this analysis, we'll remove those variables as well.
+
+```{r}
+traindata = traindata[, colSums(is.na(traindata)) <= nrow(traindata)*0.2]
+
+lst = grep("^X|timestamp", names(traindata))
+traindata = traindata[, -lst]
+
+dim(traindata)
+```
+
+## Slicing Data
+With the training data cleaned, we need to split the data to training and testing for cross-validation purpose. Here, we choose 75% of the sample as training, and the rest 25% as testing. To ensure the reproducibility of the analysis, we'll set a seed as well.
+
+```{r, cache=TRUE, message=FALSE}
+library(caret)
+set.seed(131)
+inTrain = createDataPartition(y=traindata$classe, p=0.75, list=FALSE)
+train = traindata[inTrain, ]
+test = traindata[-inTrain, ]
+```
+
+## Modeling Data
+
+Since we have 88 variables as potential predictors, and the outcome is a factor with 5 levels, the best method to model the data is random forest. It automatically selects the most important predictors, and always has high accuracy rate. For cross validation, we'll use 5 folds when apply the algorithm.
+
+```{r, cache=TRUE}
+library("randomForest")
+ModelFit = train(classe~., data=train, method="rf", trControl=trainControl(method="cv", 5))
+```
